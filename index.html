@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>고급 푸시 알림 빌더</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --primary-color: #1a73e8;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 왼쪽 에디터 영역 */
+        .editor-section {
+            width: 380px;
+            background: white;
+            padding: 25px;
+            box-shadow: 2px 0 15px rgba(0,0,0,0.1);
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        h2 { font-size: 1.2rem; margin-bottom: 20px; color: #333; }
+
+        .input-group { margin-bottom: 18px; }
+        label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; font-weight: bold; }
+        
+        input[type="text"], input[type="range"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        input[type="file"] { font-size: 12px; margin-top: 5px; }
+        textarea { height: 80px; resize: none; }
+
+        /* 슬라이더 스타일 */
+        .width-value { font-weight: normal; color: var(--primary-color); float: right; }
+
+        /* 오른쪽 미리보기 영역 */
+        .preview-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background: #e2e2e2;
+        }
+
+        .preview-label { margin-bottom: 15px; color: #777; font-size: 12px; letter-spacing: 1px; }
+
+        /* 푸시 알림 컨테이너 */
+        .push-container {
+            /* JS로 조절될 너비 기본값 */
+            width: 360px; 
+            background-color: white;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 18px;
+            box-sizing: border-box;
+            transition: width 0.1s ease-out;
+        }
+
+        .push-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .app-info { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #5f6368; }
+        .chrome-icon { width: 16px; height: 16px; }
+
+        /* 타이틀: 한 줄 초과 시 말줄임표(...) 처리 핵심 코드 */
+        .push-title { 
+            font-size: 16px; 
+            font-weight: bold; 
+            color: #202124; 
+            margin: 0 0 4px 0;
+            
+            white-space: nowrap;      /* 줄바꿈 금지 */
+            overflow: hidden;         /* 넘치는 부분 숨김 */
+            text-overflow: ellipsis;  /* 말줄임표 표시 */
+            width: 100%;              /* 부모 너비에 맞춤 */
+        }
+
+        /* 본문: 전체 내용 유지 */
+        .push-body { 
+            font-size: 14px; 
+            color: #5f6368; 
+            line-height: 1.4; 
+            margin: 0 0 12px 0;
+            word-break: break-all;    /* 긴 단어도 끊어서 줄바꿈 */
+        }
+
+        .push-image-box {
+            width: 100%;
+            height: 180px;
+            border-radius: 12px;
+            overflow: hidden;
+            background-color: #eee;
+            position: relative;
+        }
+        .push-image-box img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .image-text-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            width: 90%;
+            font-weight: 800;
+            font-size: 20px;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+            white-space: pre-wrap;
+        }
+
+        .push-footer { text-align: center; border-top: 1px solid #f1f3f4; margin-top: 12px; padding-top: 12px; }
+        .opt-out { font-size: 12px; color: #999; text-decoration: none; }
+
+    </style>
+</head>
+<body>
+
+    <div class="editor-section">
+        <h2>Push 알림 커스텀 툴</h2>
+        
+        <div class="input-group">
+            <label>미리보기 너비 조절 <span class="width-value" id="width-display">360px</span></label>
+            <input type="range" id="in-width" min="300" max="500" value="360" oninput="update()">
+        </div>
+
+        <div class="input-group">
+            <label>출처 사이트</label>
+            <input type="text" id="in-site" value="www.kr-weather.com" oninput="update()">
+        </div>
+
+        <div class="input-group">
+            <label>알림 타이틀 (한 줄 넘으면 잘림)</label>
+            <input type="text" id="in-title" value="제목이 길어지면 어떻게 될까요? 직접 확인해 보세요!" oninput="update()">
+        </div>
+
+        <div class="input-group">
+            <label>알림 본문 (전체 표시)</label>
+            <textarea id="in-body" oninput="update()">이곳에 입력하는 본문 내용은 아무리 길어져도 잘리지 않고 아래로 늘어나며 전체 내용이 표시됩니다.</textarea>
+        </div>
+
+        <div class="input-group">
+            <label>이미지 업로드</label>
+            <input type="file" id="in-file" accept="image/*" onchange="loadImage(this)">
+        </div>
+
+        <div class="input-group">
+            <label>이미지 위 텍스트</label>
+            <textarea id="in-overlay" oninput="update()">이미지 중앙 텍스트</textarea>
+        </div>
+    </div>
+
+    <div class="preview-section">
+        <div class="preview-label">PREVIEW SCREEN</div>
+        
+        <div class="push-container" id="push-card">
+            <div class="push-header">
+                <div class="app-info">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/e/e1/Google_Chrome_icon_%28February_2022%29.svg" class="chrome-icon">
+                    <span id="out-site">Chrome · www.kr-weather.com</span>
+                </div>
+                <span style="font-size: 11px; color: #888;">07:02</span>
+            </div>
+
+            <div class="push-content">
+                <div class="push-title" id="out-title">제목이 길어지면 어떻게 될까요? 직접 확인해 보세요!</div>
+                <div class="push-body" id="out-body">이곳에 입력하는 본문 내용은 아무리 길어져도 잘리지 않고 아래로 늘어나며 전체 내용이 표시됩니다.</div>
+            </div>
+
+            <div class="push-image-box">
+                <img id="out-img" src="https://images.unsplash.com/photo-1534088568595-a066f410bcda?w=600">
+                <div class="image-text-overlay" id="out-overlay">이미지 중앙 텍스트</div>
+            </div>
+
+            <div class="push-footer">
+                <a href="#" class="opt-out">수신 거부</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function update() {
+            // 입력 데이터 가져오기
+            const widthVal = document.getElementById('in-width').value;
+            const site = document.getElementById('in-site').value;
+            const title = document.getElementById('in-title').value;
+            const body = document.getElementById('in-body').value;
+            const overlay = document.getElementById('in-overlay').value;
+
+            // 미리보기 반영
+            const card = document.getElementById('push-card');
+            card.style.width = widthVal + 'px';
+            document.getElementById('width-display').innerText = widthVal + 'px';
+            
+            document.getElementById('out-site').innerText = 'Chrome · ' + site;
+            document.getElementById('out-title').innerText = title;
+            // 타이틀 툴팁 추가 (잘렸을 때 전체 내용을 볼 수 있게)
+            document.getElementById('out-title').title = title; 
+            
+            document.getElementById('out-body').innerText = body;
+            document.getElementById('out-overlay').innerText = overlay;
+        }
+
+        function loadImage(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('out-img').src = e.target.result;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        
+        // 초기 로드 시 한 번 실행
+        update();
+    </script>
+</body>
+</html>
